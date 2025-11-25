@@ -16,7 +16,7 @@ H γνωστή ειδησεογραφική ιστοσελίδα in.gr διαθ�
 5. Η εφαρμογή θα πρέπει να υποστηρίζει τη διαχείριση χρηστών και των προφίλ τους.
 '''
 
-import os.path
+import os
 import urllib.request
 import urllib.error
 import re
@@ -424,7 +424,6 @@ def clear_temps():
     ΕΡΩΤΗΜΑ 8.
     Να καθαρίσετε όποια βοηθητικά αρχεία έχουν δημιουργηθεί κατά τη διάρκεια εκτέλεσης του προγράμματος
     '''
-    import os
     temp_files = ['mytemp.csv', 'tempfile.rss']
     for temp_file in temp_files:
         if os.path.isfile(temp_file):
