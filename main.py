@@ -47,7 +47,24 @@ def login_user():
                                 το προφίλ του χρήστη στο αρχείο users_file, και επιστρέφει True,
             αλλιώς επιστρέφει False
     '''
-    return False
+    global user
+    username = input('Δώστε το όνομα χρήστη: ')
+    if not username:
+        return False
+    if username == 'admin':
+        admin()
+        return False
+    if retrieve_user(username):
+        print(f'Καλώς ήρθατε {username}!')
+        return True
+    else:
+        reply = input('Ο χρήστης δεν υπάρχει. Θέλετε να δημιουργήσετε προφίλ; (Ναι/Όχι) ')
+        if reply and reply[0].lower() in 'νny':
+            user = {'user': username, 'areas': {}}
+            update_user()
+            return True
+        else:
+            return False
 
 def admin():
     '''
@@ -58,7 +75,30 @@ def admin():
     Η συνάρτηση χρησιμοποιεί τις βοηθητικές συναρτήσεις του αρχείου util.py
     Δεν επιστρέφει τιμή.
     '''
-    pass
+    users = util.csv_to_dict(users_file)
+    while True:
+        # Show existing users
+        user_names = list(set([u['user'] for u in users]))
+        print('Υπάρχοντες χρήστες:', user_names)
+        action = input('(Δ)ιαγραφή χρήστη, (Π)ροσθήκη χρήστη, (Enter) για έξοδο: ')
+        if not action:
+            break
+        if action[0].lower() in 'δd':
+            name = input('Όνομα χρήστη για διαγραφή: ')
+            if name:
+                users = [u for u in users if u['user'] != name]
+                if users:
+                    util.dict_to_csv(users, users_file)
+                else:
+                    with open(users_file, 'w', encoding='utf-8') as f:
+                        f.write('user;area;keywords\n')
+                print(f'Ο χρήστης {name} διαγράφηκε.')
+        elif action[0].lower() in 'πpa':
+            name = input('Όνομα νέου χρήστη: ')
+            if name and name not in user_names:
+                users.append({'user': name, 'area': '', 'keywords': ''})
+                util.dict_to_csv(users, users_file)
+                print(f'Ο χρήστης {name} προστέθηκε.')
 
 def retrieve_user(username):
     '''
@@ -74,7 +114,22 @@ def retrieve_user(username):
     διαχωριστικό. Συνεπώς πρέπει εδώ να τους διαχωρίσουμε και να τους εισάγουμε στη σχετική λίστα όρων.
     Η συνάρτηση επιστρέφει False αν δεν υπάρχει ο χρήστης ήδη στο αρχείο users_file
     '''
-    return False
+    global user
+    users = util.csv_to_dict(users_file)
+    user_entries = [u for u in users if u['user'] == username]
+    if not user_entries:
+        return False
+    # Build user dictionary
+    user = {'user': username, 'areas': {}}
+    for entry in user_entries:
+        area = entry.get('area', '')
+        keywords = entry.get('keywords', '')
+        if area:
+            if keywords:
+                user['areas'][area] = keywords.split('$')
+            else:
+                user['areas'][area] = []
+    return True
 
 def update_user():
     '''
@@ -86,7 +141,22 @@ def update_user():
     συμβολοσειρά με τον χαρακτήρα $ ως διαχωριστικό.
     Επιστρέφει None
     '''
-    pass
+    global user
+    # Load existing users
+    users = util.csv_to_dict(users_file)
+    # Remove current user's entries
+    users = [u for u in users if u['user'] != user['user']]
+    # Add current user's entries
+    if user.get('areas'):
+        for area, keywords in user['areas'].items():
+            keywords_str = '$'.join(keywords) if keywords else ''
+            users.append({'user': user['user'], 'area': area, 'keywords': keywords_str})
+    else:
+        # User with empty profile
+        users.append({'user': user['user'], 'area': '', 'keywords': ''})
+    # Save all users
+    util.dict_to_csv(users, users_file)
+    return None
 
 
 def load_newsfeeds():
@@ -181,7 +251,18 @@ def print_news_item(item_no):
     Χρησιμοποιήστε την βοηθητική συνάρτηση formatted_print() για το σώμα της είδησης.
     Η συνάρτηση επιστρέφει True αν η είδηση βρέθηκε και τυπώθηκε, και False αν όχι
     '''
-    return False
+    try:
+        news_items = util.csv_to_dict('mytemp.csv')
+        for item in news_items:
+            if int(item['no']) == item_no:
+                print(f"\nΤίτλος: {item['title']}")
+                print(f"Ημερομηνία: {item['date']}")
+                print("Περιεχόμενο:")
+                formatted_print(item['content'])
+                return True
+        return False
+    except FileNotFoundError:
+        return False
 
 
 def format_date(date):
@@ -241,6 +322,36 @@ def manage_profile(feeds):
         Επαναληπτικά ζητήστε από τον χρήστη να ορίσει τα θέματα ειδήσεων που τον ενδιαφέρουν (δέστε παράδειγμα στο βίντεο)
 
         '''
+        # QUESTION 6 - Select news categories
+        while True:
+            print('\nΔιαθέσιμες κατηγορίες ειδήσεων:')
+            for i, feed in enumerate(main_feeds):
+                marker = '*' if feed in user['areas'] else ' '
+                print(f'{marker} {i}: {feed}')
+            print_user_areas(main_feeds)
+            selection = input('Προσθήκη: +αριθμός, Αφαίρεση: -αριθμός, Enter για συνέχεια: ')
+            if not selection:
+                break
+            if selection.startswith('+'):
+                try:
+                    idx = int(selection[1:])
+                    if 0 <= idx < len(main_feeds):
+                        area = main_feeds[idx]
+                        if area not in user['areas']:
+                            user['areas'][area] = []
+                            modify = True
+                except ValueError:
+                    print('Μη έγκυρη επιλογή')
+            elif selection.startswith('-'):
+                try:
+                    idx = int(selection[1:])
+                    if 0 <= idx < len(main_feeds):
+                        area = main_feeds[idx]
+                        if area in user['areas']:
+                            del user['areas'][area]
+                            modify = True
+                except ValueError:
+                    print('Μη έγκυρη επιλογή')
         print_user_profile()
         print('\nΤώρα για κάθε θέμα ειδήσεων μπορείτε να επιλέξετε όρους αναζήτησης')
         '''
@@ -249,6 +360,24 @@ def manage_profile(feeds):
         όρους αναζήτησης (δέστε παράδειγμα στο βίντεο)
 
         '''
+        # QUESTION 7 - Select keywords for each category
+        for area in list(user['areas'].keys()):
+            while True:
+                print(f'\nΚατηγορία: {area}')
+                print(f'Τρέχοντες όροι αναζήτησης: {user["areas"][area]}')
+                keyword_input = input('Προσθήκη: +λέξη, Αφαίρεση: -λέξη, Enter για επόμενη κατηγορία: ')
+                if not keyword_input:
+                    break
+                if keyword_input.startswith('+'):
+                    keyword = keyword_input[1:].strip()
+                    if keyword and keyword not in user['areas'][area]:
+                        user['areas'][area].append(keyword)
+                        modify = True
+                elif keyword_input.startswith('-'):
+                    keyword = keyword_input[1:].strip()
+                    if keyword in user['areas'][area]:
+                        user['areas'][area].remove(keyword)
+                        modify = True
         print_user_profile()
         reply = input('\n ... Θέλετε άλλες αλλαγές στο προφίλ σας (ναι για αλλαγές))')
         if not reply or reply[0].lower() != 'ν': break
@@ -279,6 +408,10 @@ def clear_temps():
     ΕΡΩΤΗΜΑ 8.
     Να καθαρίσετε όποια βοηθητικά αρχεία έχουν δημιουργηθεί κατά τη διάρκεια εκτέλεσης του προγράμματος
     '''
+    temp_files = ['mytemp.csv', 'tempfile.rss']
+    for temp_file in temp_files:
+        if os.path.isfile(temp_file):
+            os.remove(temp_file)
 
 def main():
     print("Σήμερα είναι :", str(datetime.datetime.today()).split()[0])
